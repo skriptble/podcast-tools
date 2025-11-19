@@ -89,21 +89,29 @@ podcast-transcribe -o transcript.json -f json -m large-v3 --verbose speaker1.wav
 
 ### Project Structure
 ```
-podcast-transcribe/
-├── main.go                 # CLI entry point, flag parsing
+podcast-tools/
+├── cmd/
+│   └── podcast-transcribe/
+│       └── main.go         # CLI entry point, flag parsing
 ├── transcriber/
 │   ├── whisper.go         # Whisper integration
 │   └── processor.go       # Parallel processing logic
 ├── formats/
+│   ├── formats.go         # Format interface
 │   ├── txt.go            # Plain text formatter
 │   ├── srt.go            # SRT formatter
 │   ├── vtt.go            # VTT formatter
 │   └── json.go           # JSON formatter
 ├── models/
 │   └── transcript.go      # Core data structures
+├── Makefile               # Build automation
 ├── go.mod
-└── README.md
+├── go.sum
+├── README.md
+└── podcast-transcriber-spec.md
 ```
+
+**Note**: The CLI tool is located in `cmd/podcast-transcribe/` to follow Go best practices, while the library packages (`models`, `transcriber`, `formats`) are at the top level for easy importing.
 
 ### Key Data Structures
 
