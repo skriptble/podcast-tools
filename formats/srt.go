@@ -7,12 +7,12 @@ import (
 	"skriptble.dev/podcast-tools/models"
 )
 
-// FormatSRT formats a transcript as SRT (SubRip) subtitle format
+// formatSRT formats a transcript as SRT (SubRip) subtitle format
 // SRT format:
 // 1
 // 00:00:00,000 --> 00:00:05,000
 // [Speaker]: Text
-func FormatSRT(transcript *models.Transcript) (string, error) {
+func formatSRT(transcript *models.Transcript) (string, error) {
 	if transcript == nil || len(transcript.Segments) == 0 {
 		return "", fmt.Errorf("transcript is empty")
 	}

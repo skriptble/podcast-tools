@@ -7,8 +7,8 @@ import (
 	"skriptble.dev/podcast-tools/models"
 )
 
-// FormatText formats a transcript as plain text
-func FormatText(transcript *models.Transcript) (string, error) {
+// formatText formats a transcript as plain text
+func formatText(transcript *models.Transcript) (string, error) {
 	if transcript == nil || len(transcript.Segments) == 0 {
 		return "", fmt.Errorf("transcript is empty")
 	}

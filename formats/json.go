@@ -21,8 +21,8 @@ type SegmentJSON struct {
 	EndTime   float64 `json:"end_time"`
 }
 
-// FormatJSON formats a transcript as JSON
-func FormatJSON(transcript *models.Transcript) (string, error) {
+// formatJSON formats a transcript as JSON
+func formatJSON(transcript *models.Transcript) (string, error) {
 	if transcript == nil || len(transcript.Segments) == 0 {
 		return "", fmt.Errorf("transcript is empty")
 	}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/go-audio/audio"
+	"github.com/go-audio/wav"
 	"skriptble.dev/podcast-tools/models"
 
 	whisper "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
@@ -94,9 +96,8 @@ func (wt *WhisperTranscriber) TranscribeFile(audioPath string, speakerLabel stri
 	}
 
 	// Load and process the audio file
-	// Note: whisper.cpp requires audio in specific format (16kHz, mono, float32)
-	// We'll need to handle audio conversion in the processor
-	audioData, err := loadAudioFile(audioPath)
+	// Note: whisper.cpp requires audio at whisper.SampleRate (16kHz), mono, float32
+	audioData, err := loadAudioFile(audioPath, wt.config.Verbose)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load audio file: %w", err)
 	}
@@ -134,22 +135,113 @@ func (wt *WhisperTranscriber) TranscribeFile(audioPath string, speakerLabel stri
 	return segments, nil
 }
 
-// loadAudioFile loads an audio file and converts it to the format required by Whisper
-// Whisper requires: 16kHz sample rate, mono channel, float32 PCM
-func loadAudioFile(audioPath string) ([]float32, error) {
-	// TODO: Implement audio file loading and conversion
-	// This will need to handle various formats (WAV, MP3, M4A, FLAC)
-	// and convert them to 16kHz mono float32 PCM
-	// For now, we'll return an error indicating this needs to be implemented
+// loadAudioFile loads a WAV file and converts it to the format required by Whisper
+// Whisper requires: whisper.SampleRate (16kHz), mono channel, float32 PCM
+func loadAudioFile(audioPath string, verbose bool) ([]float32, error) {
+	// Open the WAV file
+	file, err := os.Open(audioPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open audio file: %w", err)
+	}
+	defer file.Close()
 
-	// Check if file exists
-	if _, err := os.Stat(audioPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("audio file not found: %s", audioPath)
+	// Create WAV decoder
+	decoder := wav.NewDecoder(file)
+	if !decoder.IsValidFile() {
+		return nil, fmt.Errorf("invalid WAV file: %s", audioPath)
 	}
 
-	// For the initial implementation, we'll expect WAV files in the correct format
-	// A full implementation would use a library like github.com/go-audio or ffmpeg
-	return nil, fmt.Errorf("audio file loading not yet implemented - requires conversion to 16kHz mono float32 PCM")
+	// Read the audio buffer
+	buf, err := decoder.FullPCMBuffer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read audio data: %w", err)
+	}
+
+	if verbose {
+		fmt.Printf("  Audio format: %d Hz, %d bit, %d channel(s)\n",
+			buf.Format.SampleRate, decoder.BitDepth, buf.Format.NumChannels)
+	}
+
+	// Convert to mono if stereo
+	var monoSamples []int
+	if buf.Format.NumChannels == 1 {
+		monoSamples = buf.Data
+	} else {
+		// Average channels to convert to mono
+		monoSamples = make([]int, len(buf.Data)/buf.Format.NumChannels)
+		for i := 0; i < len(monoSamples); i++ {
+			sum := 0
+			for ch := 0; ch < buf.Format.NumChannels; ch++ {
+				sum += buf.Data[i*buf.Format.NumChannels+ch]
+			}
+			monoSamples[i] = sum / buf.Format.NumChannels
+		}
+	}
+
+	// Resample to whisper.SampleRate if needed
+	targetRate := whisper.SampleRate
+	sourceSamples := monoSamples
+	if buf.Format.SampleRate != targetRate {
+		if verbose {
+			fmt.Printf("  Resampling from %d Hz to %d Hz\n", buf.Format.SampleRate, targetRate)
+		}
+		sourceSamples = resample(monoSamples, buf.Format.SampleRate, targetRate)
+	}
+
+	// Convert to float32 normalized to [-1.0, 1.0]
+	floatSamples := make([]float32, len(sourceSamples))
+
+	// Determine the bit depth for normalization
+	// The go-audio library uses int samples, and the max value depends on bit depth
+	bitDepth := decoder.BitDepth
+	maxVal := float32(1 << uint(bitDepth-1)) // 2^(bitDepth-1)
+
+	for i, sample := range sourceSamples {
+		floatSamples[i] = float32(sample) / maxVal
+
+		// Clamp to [-1.0, 1.0] to handle any potential overflow
+		if floatSamples[i] > 1.0 {
+			floatSamples[i] = 1.0
+		} else if floatSamples[i] < -1.0 {
+			floatSamples[i] = -1.0
+		}
+	}
+
+	if verbose {
+		fmt.Printf("  Loaded %d samples (%.2f seconds)\n",
+			len(floatSamples), float64(len(floatSamples))/float64(targetRate))
+	}
+
+	return floatSamples, nil
+}
+
+// resample performs simple linear interpolation resampling
+func resample(samples []int, fromRate, toRate int) []int {
+	if fromRate == toRate {
+		return samples
+	}
+
+	ratio := float64(fromRate) / float64(toRate)
+	outputLen := int(float64(len(samples)) / ratio)
+	resampled := make([]int, outputLen)
+
+	for i := 0; i < outputLen; i++ {
+		srcPos := float64(i) * ratio
+		srcIdx := int(srcPos)
+
+		if srcIdx >= len(samples)-1 {
+			resampled[i] = samples[len(samples)-1]
+			continue
+		}
+
+		// Linear interpolation
+		frac := srcPos - float64(srcIdx)
+		sample1 := float64(samples[srcIdx])
+		sample2 := float64(samples[srcIdx+1])
+		resampled[i] = int(sample1 + (sample2-sample1)*frac)
+	}
+
+	return resampled
 }
 
 // GetDefaultModelPath returns the default path for Whisper models

@@ -179,10 +179,11 @@ Structured format with all metadata:
 
 ## Audio File Requirements
 
-- **Format**: WAV, MP3, M4A, or FLAC
-- **Recommendation**: 16kHz mono WAV files for best compatibility
+- **Format**: WAV (16-bit or 24-bit PCM)
+- **Sample rate**: Any sample rate (automatically resampled to 16kHz)
+- **Channels**: Mono or stereo (automatically converted to mono)
 - **One file per speaker**: Each audio file should contain a single speaker's isolated track
-- Whisper.cpp requires audio to be converted to 16kHz mono float32 PCM internally
+- **Note**: Whisper internally requires 16kHz mono float32 PCM; conversion is handled automatically
 
 ## Library Usage
 
@@ -224,7 +225,7 @@ output, err := formats.FormatTranscript(transcript, formats.FormatJSON)
 1. **Use appropriate model size**: large-v3 for best accuracy, small/medium for faster processing
 2. **Parallel processing**: The tool automatically uses all CPU cores, but you can limit with `-p`
 3. **Hardware acceleration**: On M1/M2/M3 Macs, Metal acceleration is automatically enabled
-4. **Audio preprocessing**: Convert audio to 16kHz mono WAV beforehand for optimal performance
+4. **Audio preprocessing**: While resampling is automatic, using 16kHz mono WAV files skips conversion for slightly faster processing
 
 ## Troubleshooting
 
@@ -248,15 +249,15 @@ make clean-all
 make build
 ```
 
-### Audio format errors
+### Invalid WAV file
 
 ```
-Error: audio file loading not yet implemented
+Error: invalid WAV file
 ```
 
-**Solution**: The current implementation expects audio files to be preprocessed. Use ffmpeg to convert:
+**Solution**: Ensure your audio file is a valid WAV file. If you have MP3, M4A, or other formats, convert to WAV first:
 ```bash
-ffmpeg -i input.mp3 -ar 16000 -ac 1 -f wav output.wav
+ffmpeg -i input.mp3 output.wav
 ```
 
 ## Project Structure

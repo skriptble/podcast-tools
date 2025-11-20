@@ -7,13 +7,13 @@ import (
 	"skriptble.dev/podcast-tools/models"
 )
 
-// FormatVTT formats a transcript as WebVTT subtitle format
+// formatVTT formats a transcript as WebVTT subtitle format
 // VTT format:
 // WEBVTT
 //
 // 00:00:00.000 --> 00:00:05.000
 // <v Speaker>Text
-func FormatVTT(transcript *models.Transcript) (string, error) {
+func formatVTT(transcript *models.Transcript) (string, error) {
 	if transcript == nil || len(transcript.Segments) == 0 {
 		return "", fmt.Errorf("transcript is empty")
 	}

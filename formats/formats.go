@@ -33,17 +33,17 @@ func IsValidFormat(format string) bool {
 	return false
 }
 
-// Format transcribes a transcript to the specified format
+// FormatTranscript transcribes a transcript to the specified format
 func FormatTranscript(transcript *models.Transcript, format Format) (string, error) {
 	switch format {
 	case FormatTXT:
-		return FormatText(transcript)
+		return formatText(transcript)
 	case FormatSRT:
-		return FormatSRT(transcript)
+		return formatSRT(transcript)
 	case FormatVTT:
-		return FormatVTT(transcript)
+		return formatVTT(transcript)
 	case FormatJSON:
-		return FormatJSON(transcript)
+		return formatJSON(transcript)
 	default:
 		return "", fmt.Errorf("unsupported format: %s", format)
 	}
