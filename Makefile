@@ -53,9 +53,11 @@ whisper: ## Clone and build whisper.cpp
 	@if [ ! -d "$(WHISPER_CPP_DIR)" ]; then \
 		echo "Cloning whisper.cpp..."; \
 		git clone --depth 1 --branch $(WHISPER_CPP_VERSION) https://github.com/ggerganov/whisper.cpp.git $(WHISPER_CPP_DIR); \
+	else \
+		echo "whisper.cpp already exists, cleaning before rebuild..."; \
+		cd $(WHISPER_CPP_DIR) && $(MAKE) clean || true; \
 	fi
 	@echo "Building whisper.cpp..."
-	cd $(WHISPER_CPP_DIR) && $(MAKE) clean
 ifeq ($(WHISPER_METAL),1)
 	@echo "Building with Metal acceleration for macOS ARM64..."
 	cd $(WHISPER_CPP_DIR) && WHISPER_METAL=1 $(MAKE) libwhisper.a
