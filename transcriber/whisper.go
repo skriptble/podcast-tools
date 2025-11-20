@@ -15,9 +15,9 @@ import (
 
 // WhisperConfig holds configuration for Whisper transcription
 type WhisperConfig struct {
-	ModelPath string  // Path to the Whisper model file
-	Language  string  // Language code (e.g., "en", "es"), "auto" for detection
-	Verbose   bool    // Enable verbose logging
+	ModelPath string // Path to the Whisper model file
+	Language  string // Language code (e.g., "en", "es"), "auto" for detection
+	Verbose   bool   // Enable verbose logging
 }
 
 // WhisperTranscriber wraps the whisper.cpp functionality
@@ -191,10 +191,24 @@ func loadAudioFile(audioPath string, verbose bool) ([]float32, error) {
 	// Convert to float32 normalized to [-1.0, 1.0]
 	floatSamples := make([]float32, len(sourceSamples))
 
-	// Determine the bit depth for normalization
-	// The go-audio library uses int samples, and the max value depends on bit depth
+	// Determine the normalization factor based on bit depth
+	// For 16-bit: max value is 2^15 (32768)
+	// For 24-bit: max value is 2^23 (8388608)
+	// For 32-bit (int or float): max value is 2^31 (2147483648)
 	bitDepth := decoder.BitDepth
-	maxVal := float32(1 << uint(bitDepth-1)) // 2^(bitDepth-1)
+	var maxVal float32
+
+	switch bitDepth {
+	case 16:
+		maxVal = 32768.0 // 2^15
+	case 24:
+		maxVal = 8388608.0 // 2^23
+	case 32:
+		maxVal = 2147483648.0 // 2^31
+	default:
+		// Fallback for other bit depths
+		maxVal = float32(1 << uint(bitDepth-1))
+	}
 
 	for i, sample := range sourceSamples {
 		floatSamples[i] = float32(sample) / maxVal

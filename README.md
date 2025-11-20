@@ -179,7 +179,7 @@ Structured format with all metadata:
 
 ## Audio File Requirements
 
-- **Format**: WAV (16-bit or 24-bit PCM)
+- **Format**: WAV (16-bit, 24-bit, or 32-bit float PCM)
 - **Sample rate**: Any sample rate (automatically resampled to 16kHz)
 - **Channels**: Mono or stereo (automatically converted to mono)
 - **One file per speaker**: Each audio file should contain a single speaker's isolated track
