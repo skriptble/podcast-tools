@@ -16,9 +16,10 @@ type AudioFile struct {
 
 // ProcessConfig holds configuration for parallel processing
 type ProcessConfig struct {
-	AudioFiles   []AudioFile    // Audio files to process
-	WhisperConfig WhisperConfig // Whisper configuration
-	MaxParallel  int            // Maximum number of parallel transcriptions (0 = number of CPUs)
+	AudioFiles      []AudioFile    // Audio files to process
+	WhisperConfig   WhisperConfig  // Whisper configuration
+	MaxParallel     int            // Maximum number of parallel transcriptions (0 = number of CPUs)
+	NumTranscribers int            // Number of transcriber instances to create (0 = 1, for memory/speed tradeoff)
 }
 
 // ProcessResult holds the result of processing a single file
@@ -34,23 +35,49 @@ func ProcessFiles(config ProcessConfig) (*models.Transcript, error) {
 		return nil, fmt.Errorf("no audio files provided")
 	}
 
-	// Determine parallelism
+	// Determine number of transcriber instances
+	numTranscribers := config.NumTranscribers
+	if numTranscribers <= 0 {
+		numTranscribers = 1
+	}
+
+	// Determine parallelism (number of workers)
 	maxParallel := config.MaxParallel
 	if maxParallel <= 0 {
 		maxParallel = runtime.NumCPU()
 	}
+	// Limit workers to number of transcribers
+	if maxParallel > numTranscribers {
+		maxParallel = numTranscribers
+	}
 
 	if config.WhisperConfig.Verbose {
-		fmt.Printf("Processing %d audio files with up to %d parallel workers\n",
-			len(config.AudioFiles), maxParallel)
+		fmt.Printf("Processing %d audio files with %d transcriber instance(s) and %d parallel worker(s)\n",
+			len(config.AudioFiles), numTranscribers, maxParallel)
 	}
 
-	// Create a transcriber instance
-	transcriber, err := NewWhisperTranscriber(config.WhisperConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transcriber: %w", err)
+	// Create a pool of transcriber instances
+	transcriberPool := make(chan *WhisperTranscriber, numTranscribers)
+	var transcribers []*WhisperTranscriber
+
+	for i := 0; i < numTranscribers; i++ {
+		transcriber, err := NewWhisperTranscriber(config.WhisperConfig)
+		if err != nil {
+			// Clean up any transcribers already created
+			for _, t := range transcribers {
+				t.Close()
+			}
+			return nil, fmt.Errorf("failed to create transcriber %d: %w", i+1, err)
+		}
+		transcribers = append(transcribers, transcriber)
+		transcriberPool <- transcriber
 	}
-	defer transcriber.Close()
+	defer func() {
+		// Clean up all transcribers
+		for _, t := range transcribers {
+			t.Close()
+		}
+	}()
 
 	// Create channels for work distribution
 	jobs := make(chan AudioFile, len(config.AudioFiles))
@@ -60,7 +87,7 @@ func ProcessFiles(config ProcessConfig) (*models.Transcript, error) {
 	var wg sync.WaitGroup
 	for i := 0; i < maxParallel; i++ {
 		wg.Add(1)
-		go worker(i, transcriber, jobs, results, &wg)
+		go workerWithPool(i, transcriberPool, jobs, results, &wg)
 	}
 
 	// Send jobs to workers
@@ -113,13 +140,21 @@ func ProcessFiles(config ProcessConfig) (*models.Transcript, error) {
 	return transcript, nil
 }
 
-// worker processes audio files from the jobs channel
-func worker(id int, transcriber *WhisperTranscriber, jobs <-chan AudioFile, results chan<- ProcessResult, wg *sync.WaitGroup) {
+// workerWithPool processes audio files from the jobs channel using transcribers from the pool
+func workerWithPool(id int, transcriberPool chan *WhisperTranscriber, jobs <-chan AudioFile, results chan<- ProcessResult, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for audioFile := range jobs {
+		// Get a transcriber from the pool
+		transcriber := <-transcriberPool
+
+		// Process the file
 		segments, err := transcriber.TranscribeFile(audioFile.Path, audioFile.Speaker)
 
+		// Return transcriber to the pool
+		transcriberPool <- transcriber
+
+		// Send result
 		results <- ProcessResult{
 			Speaker:  audioFile.Speaker,
 			Segments: segments,

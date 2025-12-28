@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/go-audio/audio"
 	"github.com/go-audio/wav"
 	"skriptble.dev/podcast-tools/models"
 
@@ -103,7 +102,9 @@ func (wt *WhisperTranscriber) TranscribeFile(audioPath string, speakerLabel stri
 	}
 
 	// Process the audio
-	if err := ctx.Process(audioData); err != nil {
+	// The Process method now requires callback functions (added in newer versions of whisper.cpp)
+	// We pass nil for all callbacks since we just want to iterate segments after processing
+	if err := ctx.Process(audioData, nil, nil, nil); err != nil {
 		return nil, fmt.Errorf("failed to process audio: %w", err)
 	}
 
@@ -207,7 +208,7 @@ func loadAudioFile(audioPath string, verbose bool) ([]float32, error) {
 		maxVal = 2147483648.0 // 2^31
 	default:
 		// Fallback for other bit depths
-		maxVal = float32(1 << uint(bitDepth-1))
+		maxVal = float32(int64(1) << uint(bitDepth-1))
 	}
 
 	for i, sample := range sourceSamples {

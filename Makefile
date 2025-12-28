@@ -9,7 +9,8 @@ INSTALL_PATH=/usr/local/bin
 # Whisper.cpp variables
 WHISPER_CPP_VERSION=v1.8.2
 WHISPER_CPP_DIR=whisper.cpp
-WHISPER_LIB=$(WHISPER_CPP_DIR)/libwhisper.a
+WHISPER_BUILD_DIR=$(WHISPER_CPP_DIR)/build
+WHISPER_LIB=$(WHISPER_BUILD_DIR)/src/libwhisper.a
 
 # Go build flags
 GOTOOLCHAIN=local
@@ -55,22 +56,24 @@ whisper: ## Clone and build whisper.cpp
 		git clone --depth 1 --branch $(WHISPER_CPP_VERSION) https://github.com/ggerganov/whisper.cpp.git $(WHISPER_CPP_DIR); \
 	else \
 		echo "whisper.cpp already exists, cleaning before rebuild..."; \
-		cd $(WHISPER_CPP_DIR) && $(MAKE) clean || true; \
+		rm -rf $(WHISPER_BUILD_DIR); \
 	fi
-	@echo "Building whisper.cpp..."
+	@echo "Configuring whisper.cpp with CMake..."
 ifeq ($(WHISPER_METAL),1)
 	@echo "Building with Metal acceleration for macOS ARM64..."
-	cd $(WHISPER_CPP_DIR) && WHISPER_METAL=1 $(MAKE) libwhisper.a
+	cd $(WHISPER_CPP_DIR) && cmake -B build -DBUILD_SHARED_LIBS=OFF -DGGML_METAL=ON
 else
-	cd $(WHISPER_CPP_DIR) && $(MAKE) libwhisper.a
+	cd $(WHISPER_CPP_DIR) && cmake -B build -DBUILD_SHARED_LIBS=OFF
 endif
+	@echo "Building whisper.cpp..."
+	cd $(WHISPER_CPP_DIR) && cmake --build build --config Release
 	@echo "whisper.cpp built successfully"
 
 build: deps whisper ## Build the CLI tool
 	@echo "Building $(BINARY_NAME) for $(PLATFORM)/$(ARCH)..."
 	@mkdir -p $(BUILD_DIR)
-	C_INCLUDE_PATH=$(PWD)/$(WHISPER_CPP_DIR) \
-	LIBRARY_PATH=$(PWD)/$(WHISPER_CPP_DIR) \
+	C_INCLUDE_PATH=$(PWD)/$(WHISPER_CPP_DIR)/include:$(PWD)/$(WHISPER_CPP_DIR)/ggml/include:$(PWD)/$(WHISPER_CPP_DIR) \
+	LIBRARY_PATH=$(PWD)/$(WHISPER_BUILD_DIR)/src:$(PWD)/$(WHISPER_BUILD_DIR)/ggml/src:$(PWD)/$(WHISPER_BUILD_DIR)/ggml/src/ggml-metal:$(PWD)/$(WHISPER_BUILD_DIR)/ggml/src/ggml-blas \
 	CGO_ENABLED=1 \
 	$(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
@@ -112,8 +115,8 @@ uninstall: ## Uninstall the binary from /usr/local/bin
 clean: ## Clean build artifacts
 	@echo "Cleaning build artifacts..."
 	@rm -rf $(BUILD_DIR)
-	@if [ -d "$(WHISPER_CPP_DIR)" ]; then \
-		cd $(WHISPER_CPP_DIR) && $(MAKE) clean; \
+	@if [ -d "$(WHISPER_BUILD_DIR)" ]; then \
+		rm -rf $(WHISPER_BUILD_DIR); \
 	fi
 	@echo "Clean complete"
 

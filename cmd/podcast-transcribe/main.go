@@ -32,6 +32,8 @@ var (
 	languageShort = flag.String("l", "", "Language code (short form)")
 	parallel     = flag.Int("parallel", 0, "Number of parallel transcription jobs (default: number of CPU cores)")
 	parallelShort = flag.Int("p", 0, "Parallel jobs (short form)")
+	transcribers = flag.Int("transcribers", 0, "Number of transcriber instances for parallel processing (default: 1, each ~3GB memory)")
+	transcribersShort = flag.Int("t", 0, "Transcriber instances (short form)")
 	verbose      = flag.Bool("verbose", false, "Enable verbose logging")
 	verboseShort = flag.Bool("v", false, "Verbose logging (short form)")
 )
@@ -83,6 +85,7 @@ func main() {
 		lang = "auto"
 	}
 	parallelJobs := getIntFlag(*parallel, *parallelShort)
+	numTranscribers := getIntFlag(*transcribers, *transcribersShort)
 	isVerbose := *verbose || *verboseShort
 
 	// Parse speaker names
@@ -136,6 +139,7 @@ func main() {
 		fmt.Printf("Model: %s (%s)\n", modelName, modelFilePath)
 		fmt.Printf("Language: %s\n", lang)
 		fmt.Printf("Parallel jobs: %d\n", parallelJobs)
+		fmt.Printf("Transcriber instances: %d\n", numTranscribers)
 		fmt.Println()
 	}
 
@@ -162,7 +166,8 @@ func main() {
 			Language:  lang,
 			Verbose:   isVerbose,
 		},
-		MaxParallel: parallelJobs,
+		MaxParallel:     parallelJobs,
+		NumTranscribers: numTranscribers,
 	}
 
 	// Process files
@@ -228,6 +233,7 @@ Optional Flags:
   --model-path         Path to Whisper model file (auto-detect if not provided)
   --language, -l       Language code (e.g., "en", "es") or "auto" for detection (default: auto)
   --parallel, -p       Number of parallel transcription jobs (default: number of CPU cores)
+  --transcribers, -t   Number of transcriber instances (default: 1, each uses ~3GB memory)
   --verbose, -v        Enable verbose logging
 
 Examples:
@@ -239,6 +245,9 @@ Examples:
 
   # JSON output with custom model and verbose logging
   podcast-transcribe -o transcript.json -f json -m large-v3 -v speaker1.wav speaker2.wav
+
+  # Four speakers with 4 parallel transcriber instances for speed
+  podcast-transcribe -o transcript.txt -f txt -t 4 -s "Alice,Bob,Carol,Dave" a.wav b.wav c.wav d.wav
 
   # Specify custom model path
   podcast-transcribe -o transcript.txt -f txt --model-path /path/to/model.bin audio.wav
